@@ -1,0 +1,175 @@
+#!/bin/bash
+
+trap "rm -fr ${TDIR}" EXIT
+
+CRAY_FORMAT=json
+DOMAINS="hpc.amslabs.hpecorp.net dev.cray.com"
+
+# Check for installed commands:
+# openssl security cray
+
+function usage() {
+  echo "Usage: $0 [-h] -s <system-name>]"
+  echo ""
+  echo "$0 will initialize an environment to interact with a HPE Cray EX Supercomputer."
+  echo "A system name must be supplied that is able to derive the API gateway."
+  echo "options:"
+  echo "h              Print this help"
+  echo "s <system>     System Name (required)"
+  echo "d <domain>     Provide a space seperated list of Domains to scan. Default is '$DOMAINS'"
+  #echo "u              Print Certificate Subject Alternate Names (Web UIs)"
+  echo "p              Set the PS1 to indicate which system is active"
+  echo ""
+  exit 0
+}
+
+function craycli_check() {
+  if ! command cray &> /dev/null; then
+    echo "cray CLI not found. Install cray?"
+    select yn in "Yes" "No"; do
+        case $yn in
+            Yes ) craycli_install; break;;
+            No  ) echo "The cray CLI must be installed to continue"; exit;;
+        esac
+    done
+  fi
+}
+
+function craycli_init() {
+  if [ $# -ne 1 ]; then
+    echo "Must pass a system name to craycli_init"
+    exit 1
+  fi
+  sys=$1
+
+  API_GW=$(scan_for_gw $sys)
+  cray init --configuration $sys --hostname $API_GW --no-auth
+  cray config set auth.login username=$USER
+}
+
+function craycli_install() {
+  echo "Not implemented..."
+  exit 1
+}
+
+function craycli_ping_check() {
+  API_GW_HOST=$(cray config get core.hostname | sed 's/https:\/\///')
+  if ! ping -c1 -W3000 $API_GW_HOST > /dev/null; then
+    echo "Could not ping $API_GW_HOST"
+    exit 1
+  fi
+}
+
+function add_cert() {
+
+  if [ $# -ne 2 ]; then
+    echo "Must pass a system name and API_GW to add_cert"
+    exit 1
+  fi
+  system=$1
+  apigw=$2
+
+  # If SSL communication is already configured, return
+  if openssl s_client -showcerts -verify 1 -connect $apigw:443 < /dev/null &> /dev/null; then
+    return
+  fi
+
+  # this could be better...
+  TDIR=$(mktemp -d)
+  pushd $TDIR > /dev/null
+
+  openssl s_client -showcerts -verify 5 -connect $apigw:443 < /dev/null 2> /dev/null | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/{ if(/BEGIN CERTIFICATE/){a++}; out="cert"a".pem"; print >out}'
+
+  for cert in *.pem; do
+    certname=$(openssl x509 -noout -subject -in $cert | sed 's/.*CN=//')
+    # If the Cert is already in the keychain, return without adding it again
+    if security find-certificate -c "$certname" &> /dev/null; then
+      return
+    fi
+    if [[ "$newname" = $system* ]]; then 
+      continue
+    else
+      cat "${cert}" >> $system.cert
+    fi
+  done
+
+  security add-trusted-cert -r trustAsRoot -k ~/Library/Keychains/login.keychain-db $system.cert
+
+  popd > /dev/null
+  rm $TDIR/*
+  rmdir $TDIR
+}
+
+function scan_for_gw() {
+
+  if [ $# -ne 1 ]; then
+    echo "Must pass a system name to scan_for_gw"
+    exit 1
+  fi
+  sys=$1
+
+
+  for domain in $DOMAINS; do
+    if host auth.cmn.$sys.$domain &> /dev/null; then
+      echo "auth.cmn.$sys.$domain"
+      return
+    fi
+  done
+
+  echo "Could not find the api gateway for $sys at the following URLs:" >&2
+  for domain in $DOMAINS; do
+    echo "auth.cmn.$sys.$domain" >&2
+  done
+  exit 1
+
+}
+
+while getopts "hs:d:" arg; do
+  case $arg in
+    h)
+      usage
+      ;;
+    s)
+      SYSTEM=$OPTARG
+      ;;
+    d)
+      DOMAINS="$OPTARG"
+      ;;
+    u)
+      PRINT_SAN="True"
+      ;;
+  esac
+done
+
+# None shall pass ...until cray is installed
+
+craycli_check
+
+if [ "$SYSTEM" = "" ]; then
+  echo "Must supply -s <system>"
+  usage
+  exit 1
+fi
+
+# Set the active cray configuration
+if cray config use $SYSTEM 2>&1 | egrep --silent "Unable to find configuration file"; then
+  echo "Could not find craycli $SYSTEM configuration. Would you like to create one?"
+  select yn in "Yes" "No"; do
+    case $yn in
+      Yes) 
+        craycli_init $SYSTEM; 
+        break
+        ;;
+      No) 
+        echo "Available configurations are:"
+        cray config list | jq -r '.configurations[] | .name'
+        exit
+        ;;
+    esac
+  done
+fi
+
+# Set the API Gateway from the active craycli config
+API_GW=$(cray config get core.hostname | sed 's/https:\/\///g')
+
+add_cert $SYSTEM $API_GW
