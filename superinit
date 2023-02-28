@@ -4,6 +4,8 @@ trap "rm -fr ${TDIR}" EXIT
 
 CRAY_FORMAT=json
 DOMAINS="hpc.amslabs.hpecorp.net dev.cray.com"
+CRAYCLI_SRC="git@github.com:Cray-HPE/craycli.git"
+PRINT_SAN=false
 
 # Check for installed commands:
 # openssl security cray
@@ -17,7 +19,7 @@ function usage() {
   echo "h              Print this help"
   echo "s <system>     System Name (required)"
   echo "d <domain>     Provide a space seperated list of Domains to scan. Default is '$DOMAINS'"
-  #echo "u              Print Certificate Subject Alternate Names (Web UIs)"
+  echo "u              Print Certificate Subject Alternate Names (Web UIs)"
   echo "p              Set the PS1 to indicate which system is active"
   echo ""
   exit 0
@@ -69,16 +71,16 @@ function add_cert() {
   system=$1
   apigw=$2
 
-  # If SSL communication is already configured, return
-  if openssl s_client -showcerts -verify 1 -connect $apigw:443 < /dev/null &> /dev/null; then
-    return
-  fi
-
   # this could be better...
   TDIR=$(mktemp -d)
   pushd $TDIR > /dev/null
 
   openssl s_client -showcerts -verify 5 -connect $apigw:443 < /dev/null 2> /dev/null | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/{ if(/BEGIN CERTIFICATE/){a++}; out="cert"a".pem"; print >out}'
+
+  if $PRINT_SAN; then
+    openssl s_client -showcerts -verify 5 -connect `echo $apigw | sed 's/auth/opa-gpm/'`:443 < /dev/null 2> /dev/null  > $system-opa-gpm.cert
+    openssl x509 -text -noout -in $system-opa-gpm.cert | grep DNS | sed 's/DNS://g' | tr -d '[:space:]' | sed 's/,/\n/g'; echo
+  fi
 
   for cert in *.pem; do
     certname=$(openssl x509 -noout -subject -in $cert | sed 's/.*CN=//')
@@ -86,7 +88,7 @@ function add_cert() {
     if security find-certificate -c "$certname" &> /dev/null; then
       return
     fi
-    if [[ "$newname" = $system* ]]; then 
+    if [[ "$certname" = $system* ]]; then 
       continue
     else
       cat "${cert}" >> $system.cert
@@ -124,7 +126,7 @@ function scan_for_gw() {
 
 }
 
-while getopts "hs:d:" arg; do
+while getopts "hs:d:u" arg; do
   case $arg in
     h)
       usage
@@ -136,13 +138,12 @@ while getopts "hs:d:" arg; do
       DOMAINS="$OPTARG"
       ;;
     u)
-      PRINT_SAN="True"
+      PRINT_SAN=true
       ;;
   esac
 done
 
 # None shall pass ...until cray is installed
-
 craycli_check
 
 if [ "$SYSTEM" = "" ]; then
@@ -168,6 +169,9 @@ if cray config use $SYSTEM 2>&1 | egrep --silent "Unable to find configuration f
     esac
   done
 fi
+
+# Check that the system responds to a simple ping
+craycli_ping_check
 
 # Set the API Gateway from the active craycli config
 API_GW=$(cray config get core.hostname | sed 's/https:\/\///g')
