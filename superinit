@@ -141,6 +141,7 @@ function sat_init() {
   apigw=$2
 
   sed -i '' -E "s/^(host[[:blank:]]*=[[:blank:]]*).*/\1'$apigw'/" ~/.config/sat/sat.toml
+  sed -i '' -E "s/^(user[[:blank:]]*=[[:blank:]]*).*/\1'$USER'/" ~/.config/sat/sat.toml
 }
 
 function add_cert() {
@@ -262,7 +263,6 @@ fi
 
 # Check that the system responds to a simple ping
 craycli_ping_check
-craycli_auth_check
 
 # Set the API Gateway from the active craycli config
 API_GW=$(cray config get core.hostname | sed 's/https:\/\///g')
@@ -272,4 +272,6 @@ mkdir -p $SUPERINIT_DIR/$SYSTEM
 echo $SYSTEM > $SUPERINIT_DIR/active_system
 echo $API_GW > $SUPERINIT_DIR/active_api_gw
 add_cert $SYSTEM $API_GW
+
+craycli_auth_check
 sat_init $SYSTEM $API_GW
