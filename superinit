@@ -4,23 +4,28 @@ trap "rm -fr ${TDIR}" EXIT
 
 CRAY_FORMAT=json
 DOMAINS="hpc.amslabs.hpecorp.net dev.cray.com"
-CRAYCLI_SRC="git@github.com:Cray-HPE/craycli.git"
+CRAY_SRC="git@github.com:Cray-HPE/craycli.git"
+CRAY_VERSION="master"
+SAT_SRC="https://github.com/Cray-HPE/sat.git"
+SAT_VERSION="3.19"
+PRODUCT_CATALOG_SRC="https://github.com/Cray-HPE/cray-product-catalog"
+PRODUCT_CATALOG_VERSION="1.6.0"
 PRINT_SAN=false
+SUPERINIT_DIR=~/.config/superinit
 
-# Check for installed commands:
-# openssl security cray
+mkdir -p $SUPERINIT_DIR
 
 function usage() {
   echo "Usage: $0 [-h] -s <system-name>]"
   echo ""
   echo "$0 will initialize an environment to interact with a HPE Cray EX Supercomputer."
-  echo "A system name must be supplied that is able to derive the API gateway."
+  echo "A system name must be supplied to derive the API gateway."
   echo "options:"
   echo "h              Print this help"
   echo "s <system>     System Name (required)"
   echo "d <domain>     Provide a space seperated list of Domains to scan. Default is '$DOMAINS'"
   echo "u              Print Certificate Subject Alternate Names (Web UIs)"
-  echo "p              Set the PS1 to indicate which system is active"
+  echo "p              Set the PS1 to indicate which system is active <not implemented>"
   echo ""
   exit 0
 }
@@ -50,8 +55,14 @@ function craycli_init() {
 }
 
 function craycli_install() {
-  echo "Not implemented..."
-  exit 1
+  mkdir -p $SUPERINIT_DIR/cmds
+  CRAY_VENV_PATH="$SUPERINIT_DIR/cmds/cray_venv"
+  python3 -m venv $CRAY_VENV_PATH
+  . $CRAY_VENV_PATH/bin/activate
+  git clone --branch=$CRAY_VERSION $CRAY_SRC $SUPERINIT_DIR/cmds/cray
+  pip install $SUPERINIT_DIR/cmds/cray
+  deactivate
+  craycli_installed=true
 }
 
 function craycli_ping_check() {
@@ -62,8 +73,82 @@ function craycli_ping_check() {
   fi
 }
 
-function add_cert() {
+function craycli_auth_check() {
+  # Check if Cray CLI has a valid authentication token...
+  if cray ims images list 2>&1 | grep rror | egrep --silent "401|403"; then
+    echo "cray command not authorized. Authorize with 'cray auth login'?"
+    select yn in "Yes" "No"; do
+        case $yn in
+            Yes ) cray_auth; break;;
+            No  ) echo "The cray CLI must be authenticated to continue"; exit;;
+        esac
+    done
+  fi
+}
 
+function cray_auth() {
+    echo "Read Keychain for cray password?"
+    select yn in "Yes" "No"; do
+        case $yn in
+            Yes ) 
+              CRAYCLI_A=$(security find-generic-password -a "$USER" -s "craycli" -w)
+              cray auth login --username $USER --password $CRAYCLI_A
+              break;;
+            No  )
+              echo "cray auth login --username $USER"
+              cray auth login --username $USER
+              break;;
+        esac
+    done
+}
+
+function sat_check() {
+  if ! command sat status &> /dev/null; then
+    echo "sat CLI not found. Install sat?"
+    select yn in "Yes" "No"; do
+        case $yn in
+            Yes ) sat_install; break;;
+            No  ) echo "sat CLI must be installed to continue"; exit;;
+        esac
+    done
+  fi
+}
+
+function sat_install() {
+  mkdir -p $SUPERINIT_DIR/cmds
+  SAT_VENV_PATH="$SUPERINIT_DIR/cmds/sat_venv"
+  python3 -m venv $SAT_VENV_PATH
+  . $SAT_VENV_PATH/bin/activate
+  git clone --branch=release/$SAT_VERSION $SAT_SRC $SUPERINIT_DIR/cmds/sat
+  git clone --branch=v$PRODUCT_CATALOG_VERSION $PRODUCT_CATALOG_SRC $SUPERINIT_DIR/cmds/cray-product-catalog
+  echo $PRODUCT_CATALOG_VERSION > $SUPERINIT_DIR/cmds/cray-product-catalog/.version
+  sed -i '' 's/cray-product-catalog.*/.\/cray-product-catalog/' $SUPERINIT_DIR/cmds/sat/requirements.lock.txt
+  
+  pushd $SUPERINIT_DIR/cmds > /dev/null
+  pip install -r $SUPERINIT_DIR/cmds/sat/requirements.lock.txt
+  pip install $SUPERINIT_DIR/cmds/sat
+  deactivate
+  popd > /dev/null
+  sat_installed=true
+}
+
+function sat_init() {
+  if [ $# -ne 2 ]; then
+    echo "Must pass a system name and API_GW to sat_init"
+    exit 1
+  fi
+  system=$1
+  apigw=$2
+
+  #alias sat="sat --token-file ~/.config/cray/tokens/$(echo $(cray config get core.hostname) | sed -e 's/https:\/\///' -e 's/\./_/g' -e "s/$/.$USER/g")"
+  alias sat="REQUESTS_CA_BUNDLE='$SUPERINIT_DIR/$system/platform-ca-certs.crt' sat --token-file ~/.config/cray/tokens/$(echo $apigw | sed -e 's/\./_/g' -e "s/$/.$USER/g")"
+  eval REQUESTS_CA_BUNDLE="$SUPERINIT_DIR/$system/platform-ca-certs.crt"
+  eval "$(register-python-argcomplete sat)"
+
+  sed -i '' -E "s/^(host[[:blank:]]*=[[:blank:]]*).*/\1'$apigw'/" ~/.config/sat/sat.toml
+}
+
+function add_cert() {
   if [ $# -ne 2 ]; then
     echo "Must pass a system name and API_GW to add_cert"
     exit 1
@@ -95,7 +180,9 @@ function add_cert() {
     fi
   done
 
+  # Add platform CA to Keychain and save a copy
   security add-trusted-cert -r trustAsRoot -k ~/Library/Keychains/login.keychain-db $system.cert
+  cp $system.cert $SUPERINIT_DIR/$system/platform-ca-certs.crt
 
   popd > /dev/null
   rm $TDIR/*
@@ -143,8 +230,16 @@ while getopts "hs:d:u" arg; do
   esac
 done
 
-# None shall pass ...until cray is installed
+# Check for installed commands:
+# openssl security python3 pip
+
 craycli_check
+sat_check
+
+if [ "$craycli_install" = "true" ] || [ "$sat_installed" = "true" ]; then
+  echo "Add 'export PATH=\"${SUPERINIT_DIR}/cmds/cray_venv/bin:${SUPERINIT_DIR}/cmds/sat_venv/bin:\${PATH}\"' to your shell profile to use sat and cray commands." 
+  export PATH="${SUPERINIT_DIR}/cmds/cray_venv/bin:${SUPERINIT_DIR}/cmds/sat_venv/bin:\${PATH}"
+fi
 
 if [ "$SYSTEM" = "" ]; then
   echo "Must supply -s <system>"
@@ -172,8 +267,14 @@ fi
 
 # Check that the system responds to a simple ping
 craycli_ping_check
+craycli_auth_check
 
 # Set the API Gateway from the active craycli config
 API_GW=$(cray config get core.hostname | sed 's/https:\/\///g')
 
+mkdir -p $SUPERINIT_DIR/$SYSTEM
+
+echo $SYSTEM > $SUPERINIT_DIR/active_system
+echo $API_GW > $SUPERINIT_DIR/active_api_gw
 add_cert $SYSTEM $API_GW
+sat_init $SYSTEM $API_GW
