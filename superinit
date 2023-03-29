@@ -140,11 +140,6 @@ function sat_init() {
   system=$1
   apigw=$2
 
-  #alias sat="sat --token-file ~/.config/cray/tokens/$(echo $(cray config get core.hostname) | sed -e 's/https:\/\///' -e 's/\./_/g' -e "s/$/.$USER/g")"
-  alias sat="REQUESTS_CA_BUNDLE='$SUPERINIT_DIR/$system/platform-ca-certs.crt' sat --token-file ~/.config/cray/tokens/$(echo $apigw | sed -e 's/\./_/g' -e "s/$/.$USER/g")"
-  eval REQUESTS_CA_BUNDLE="$SUPERINIT_DIR/$system/platform-ca-certs.crt"
-  eval "$(register-python-argcomplete sat)"
-
   sed -i '' -E "s/^(host[[:blank:]]*=[[:blank:]]*).*/\1'$apigw'/" ~/.config/sat/sat.toml
 }
 
