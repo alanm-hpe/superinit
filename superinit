@@ -1,3 +1,26 @@
+#
+# MIT License
+#
+# (C) Copyright 2023 Hewlett Packard Enterprise Development LP
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+#
 #!/bin/bash
 
 trap "rm -fr ${TDIR}" EXIT
@@ -141,7 +164,7 @@ function sat_init() {
   apigw=$2
 
   sed -i '' -E "s/^(host[[:blank:]]*=[[:blank:]]*).*/\1'$apigw'/" ~/.config/sat/sat.toml
-  sed -i '' -E "s/^(user[[:blank:]]*=[[:blank:]]*).*/\1'$USER'/" ~/.config/sat/sat.toml
+  sed -i '' -E "s/^(username[[:blank:]]*=[[:blank:]]*).*/\1'$USER'/" ~/.config/sat/sat.toml
 }
 
 function add_cert() {
@@ -232,9 +255,9 @@ done
 craycli_check
 sat_check
 
-if [ "$craycli_install" = "true" ] || [ "$sat_installed" = "true" ]; then
+if [ "$craycli_installed" = "true" ] || [ "$sat_installed" = "true" ]; then
   echo "Add 'export PATH=\"${SUPERINIT_DIR}/cmds/cray_venv/bin:${SUPERINIT_DIR}/cmds/sat_venv/bin:\${PATH}\"' to your shell profile to use sat and cray commands." 
-  export PATH="${SUPERINIT_DIR}/cmds/cray_venv/bin:${SUPERINIT_DIR}/cmds/sat_venv/bin:\${PATH}"
+  export PATH="${SUPERINIT_DIR}/cmds/cray_venv/bin:${SUPERINIT_DIR}/cmds/sat_venv/bin:${PATH}"
 fi
 
 if [ "$SYSTEM" = "" ]; then
