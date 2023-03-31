@@ -113,4 +113,4 @@ Please make sure to update tests as appropriate.
 
 ## License
 
-[MIT](https://choosealicense.com/licenses/mit/)
+This project is copyrighted by Hewlett Packard Enterprise Development LP and is under the MIT license. See the LICENSE file for details.
