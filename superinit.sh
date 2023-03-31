@@ -35,7 +35,7 @@ PRODUCT_CATALOG_SRC="https://github.com/Cray-HPE/cray-product-catalog"
 PRODUCT_CATALOG_VERSION="1.6.0"
 PRINT_SAN=false
 SUPERINIT_DIR=~/.config/superinit
-VERSION=0.0.1
+VERSION=0.0.2
 
 mkdir -p $SUPERINIT_DIR
 

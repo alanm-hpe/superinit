@@ -1,6 +1,8 @@
 # superinit
 
-`superinit` is a command line utility to perform the tasks necessary to interface with an HPE Cray EX Shasta system.
+*DISCLAIMER*: `superinit` is a work-in-progess, anticipate issues as this utility is evolves.
+
+`superinit` is a MacOS command line utility to perform the tasks necessary to interface with an HPE Cray EX Shasta system.
 
 It's primary tasks are to:
 * Install the `cray` and `sat` CLI, if not found in the $PATH
@@ -74,6 +76,32 @@ prometheus.cmn.lemondrop.hpc.amslabs.hpecorp.net
 sma-grafana.cmn.lemondrop.hpc.amslabs.hpecorp.net
 sma-kibana.cmn.lemondrop.hpc.amslabs.hpecorp.net
 vcs.cmn.lemondrop.hpc.amslabs.hpecorp.net
+```
+
+## Advanced
+
+To configure your environment further for `superinit`, consider adding the following to your shell startup once `cray` and `sat` are installed:
+```
+# Connect sat command to the active cray configuration and authentication.
+function superinit_sat {
+  export REQUESTS_CA_BUNDLE="/Users/alanm/.config/superinit/$(cat ~/.config/superinit/active_system)/platform-ca-certs.crt"
+  $HOME/.config/superinit/cmds/sat_venv/bin/sat --token-file ~/.config/cray/tokens/$(echo $(cray config get core.hostname) | sed -e 's/https:\/\///' -e 's/\./_/g' -e "s/$/.$USER/g") $@
+}
+alias sat=superinit_sat
+
+# Update PS1 with the active HPE Cray EX Shasta system
+parse_supercomputer() {
+     active_super=~/.config/superinit/active_system
+     if [[ -f $active_super ]]; then cat $active_super 2> /dev/null | sed 's/.*/ (&)/'; fi
+}
+# Example: \[\033[35m\]\$(parse_supercomputer)\[\033[00m\]
+
+# Auto complete cray and sat command
+eval "$(_CRAY_COMPLETE=source_bash cray)"
+eval "$(register-python-argcomplete sat)"
+
+# Use json instead of toml for default cray output
+export CRAY_FORMAT=json
 ```
 
 ## Contributing

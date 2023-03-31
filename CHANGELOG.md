@@ -7,5 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] - 2023-03-31
+* Update CHANGELOG.md with shell tips and include a disclaimer
+
 ## [0.0.1] - 2023-03-31
 * First release of superinit.sh. There will be dragons.
