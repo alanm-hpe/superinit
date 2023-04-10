@@ -36,6 +36,9 @@ PRODUCT_CATALOG_VERSION="1.6.0"
 PRINT_SAN=false
 SUPERINIT_DIR=~/.config/superinit
 VERSION=0.0.2
+PY_VERSION=3
+PYTHON=python$PY_VERSION
+PIP=pip$PY_VERSION
 
 mkdir -p $SUPERINIT_DIR
 
@@ -81,10 +84,10 @@ function craycli_init() {
 function craycli_install() {
   mkdir -p $SUPERINIT_DIR/cmds
   CRAY_VENV_PATH="$SUPERINIT_DIR/cmds/cray_venv"
-  python3 -m venv $CRAY_VENV_PATH
+  $PYTHON -m venv $CRAY_VENV_PATH
   . $CRAY_VENV_PATH/bin/activate
   git clone --branch=$CRAY_VERSION $CRAY_SRC $SUPERINIT_DIR/cmds/cray
-  pip install $SUPERINIT_DIR/cmds/cray
+  $PIP install $SUPERINIT_DIR/cmds/cray
   deactivate
   craycli_installed=true
 }
@@ -141,7 +144,7 @@ function sat_check() {
 function sat_install() {
   mkdir -p $SUPERINIT_DIR/cmds
   SAT_VENV_PATH="$SUPERINIT_DIR/cmds/sat_venv"
-  python3 -m venv $SAT_VENV_PATH
+  $PYTHON -m venv $SAT_VENV_PATH
   . $SAT_VENV_PATH/bin/activate
   git clone --branch=release/$SAT_VERSION $SAT_SRC $SUPERINIT_DIR/cmds/sat
   git clone --branch=v$PRODUCT_CATALOG_VERSION $PRODUCT_CATALOG_SRC $SUPERINIT_DIR/cmds/cray-product-catalog
@@ -149,8 +152,8 @@ function sat_install() {
   sed -i '' 's/cray-product-catalog.*/.\/cray-product-catalog/' $SUPERINIT_DIR/cmds/sat/requirements.lock.txt
   
   pushd $SUPERINIT_DIR/cmds > /dev/null
-  pip install -r $SUPERINIT_DIR/cmds/sat/requirements.lock.txt
-  pip install $SUPERINIT_DIR/cmds/sat
+  $PIP install -r $SUPERINIT_DIR/cmds/sat/requirements.lock.txt
+  $PIP install $SUPERINIT_DIR/cmds/sat
   deactivate
   popd > /dev/null
   sat_installed=true
