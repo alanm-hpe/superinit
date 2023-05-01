@@ -102,7 +102,7 @@ function craycli_ping_check() {
 
 function craycli_auth_check() {
   # Check if Cray CLI has a valid authentication token...
-  if cray ims images list 2>&1 | grep rror | egrep --silent "401|403"; then
+  if cray ims images list 2>&1 | grep rror | egrep --silent "Error: Internal Server Error|401|403"; then
     echo "cray command not authorized. Authorize with 'cray auth login'?"
     select yn in "Yes" "No"; do
         case $yn in
