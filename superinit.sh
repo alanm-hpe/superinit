@@ -111,6 +111,15 @@ function craycli_auth_check() {
         esac
     done
   fi
+  if cray uas list 2>&1 | grep rror | egrep --silent "Error: Internal Server Error|401|403"; then
+    echo "cray command not authorized for UAS. Authorize with 'cray auth login'?"
+    select yn in "Yes" "No"; do
+        case $yn in
+            Yes ) cray_auth; break;;
+            No  ) echo "The cray CLI token is not valid for UAS"; break;;
+        esac
+    done
+  fi
 }
 
 function cray_auth() {
